@@ -6,11 +6,12 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:lambda": "cd lambda/upload-file && tsc && cd ../process-query && tsc",
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk",
-    "deploy": "cdk deploy",
-    "deploy:sunnyhill": "./scripts/deploy.sh",
+    "deploy": "npm run build:lambda && cdk deploy",
+    "deploy:sunnyhill": "npm run build:lambda && ./scripts/deploy.sh",
     "destroy": "cdk destroy"
   },
   "devDependencies": {

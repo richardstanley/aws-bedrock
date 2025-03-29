@@ -1,0 +1,66 @@
+type Query {
+  processQuery(input: ProcessQueryInput!): ProcessQueryResponse!
+  getChatHistory(userId: String!): [ChatMessage!]!
+  getUploadStatus(fileId: String!): UploadStatus!
+}
+
+type Mutation {
+  uploadFile(input: UploadFileInput!): UploadFileResponse!
+  saveChatMessage(input: SaveChatMessageInput!): ChatMessage!
+}
+
+input ProcessQueryInput {
+  question: String!
+  userId: String!
+}
+
+type ProcessQueryResponse {
+  queryId: String!
+  status: String!
+  results: QueryResult
+  error: String
+}
+
+type QueryResult {
+  columns: [String!]!
+  rows: [[String!]!]!
+}
+
+input UploadFileInput {
+  fileName: String!
+  fileType: String!
+  userId: String!
+}
+
+type UploadFileResponse {
+  fileId: String!
+  uploadUrl: String!
+  status: String!
+  error: String
+}
+
+type UploadStatus {
+  fileId: String!
+  status: String!
+  progress: Int
+  error: String
+  tableName: String
+}
+
+type ChatMessage {
+  messageId: String!
+  userId: String!
+  question: String!
+  answer: String
+  timestamp: String!
+  status: String!
+  error: String
+}
+
+input SaveChatMessageInput {
+  userId: String!
+  question: String!
+  answer: String
+  status: String!
+  error: String
+} 

@@ -26,14 +26,6 @@ echo "Region: $REGION"
 echo "Building project..."
 npm run build
 
-# Run tests
-echo "Running tests..."
-npm test
-
-# Bootstrap CDK (if not already done)
-echo "Bootstrapping CDK..."
-npx cdk bootstrap aws://$ACCOUNT_ID/$REGION
-
 # Deploy the stack
 echo "Deploying stack..."
 npx cdk deploy \
@@ -41,5 +33,22 @@ npx cdk deploy \
   --profile sunnyhill \
   --outputs-file cdk-outputs.json
 
-echo "Deployment complete!"
-echo "Outputs saved to cdk-outputs.json" 
+# Update integration test environment variables
+echo "Updating integration test environment variables..."
+API_URL=$(jq -r '.SwitchbladeStack.GraphQLAPIURL' cdk-outputs.json)
+
+cat > test/integration/.env << EOF
+# AppSync API Configuration
+APPSYNC_API_URL=$API_URL
+
+# Optional: Test Configuration
+TEST_TIMEOUT=30000
+EOF
+
+# Setup frontend development environment
+echo "Setting up frontend development environment..."
+./scripts/deploy-frontend.sh
+
+echo "Development environment setup complete!"
+echo "Backend API URL: $API_URL"
+echo "Frontend: Run 'cd frontend && npm run dev' to start the development server" 

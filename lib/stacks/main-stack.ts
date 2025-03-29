@@ -5,11 +5,27 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as athena from 'aws-cdk-lib/aws-athena';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as appsync from 'aws-cdk-lib/aws-appsync';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 
 export class MainStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Create SNS topic for alerts
+    const alertTopic = new sns.Topic(this, 'AlertTopic', {
+      displayName: 'Switchblade Alerts',
+    });
+
+    // Add email subscription to the topic
+    alertTopic.addSubscription(
+      new subscriptions.EmailSubscription('your-email@example.com')
+    );
 
     // Create S3 buckets
     const resultsBucket = new s3.Bucket(this, 'QueryResultsBucket', {
@@ -232,6 +248,91 @@ export class MainStack extends cdk.Stack {
     chatHistoryTable.grantReadWriteData(testUserRole);
     logGroup.grantWrite(testUserRole);
 
+    // Create AppSync API
+    const api = new appsync.GraphqlApi(this, 'SwitchbladeApi', {
+      name: 'switchblade-api',
+      definition: appsync.Definition.fromFile('schema.graphql'),
+      authorizationConfig: {
+        defaultAuthorization: {
+          authorizationType: appsync.AuthorizationType.USER_POOL,
+          userPoolConfig: {
+            userPool: userPool,
+          },
+        },
+        additionalAuthorizationModes: [
+          {
+            authorizationType: appsync.AuthorizationType.IAM,
+          },
+        ],
+      },
+      xrayEnabled: true,
+    });
+
+    // Create Lambda functions for resolvers
+    const processQueryLambda = new lambda.Function(this, 'ProcessQueryFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'dist/index.handler',
+      code: lambda.Code.fromAsset('lambda/process-query'),
+      environment: {
+        NOVA_API_KEY: process.env.NOVA_API_KEY || '',
+        ATHENA_WORKGROUP: workgroup.name,
+        RESULTS_BUCKET: resultsBucket.bucketName,
+      },
+      timeout: cdk.Duration.seconds(30),
+    });
+
+    const uploadFileLambda = new lambda.Function(this, 'UploadFileFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'dist/index.handler',
+      code: lambda.Code.fromAsset('lambda/upload-file'),
+      environment: {
+        UPLOAD_BUCKET: uploadBucket.bucketName,
+        ATHENA_WORKGROUP: workgroup.name,
+      },
+      timeout: cdk.Duration.seconds(30),
+    });
+
+    // Grant permissions to Lambda functions
+    resultsBucket.grantReadWrite(processQueryLambda);
+    uploadBucket.grantReadWrite(uploadFileLambda);
+    chatHistoryTable.grantReadWriteData(processQueryLambda);
+    csvMetadataTable.grantReadWriteData(uploadFileLambda);
+
+    // Grant CloudWatch Logs permissions
+    logGroup.grantWrite(processQueryLambda);
+    logGroup.grantWrite(uploadFileLambda);
+
+    // Add AppSync resolvers
+    const processQueryDS = api.addLambdaDataSource('ProcessQueryDS', processQueryLambda);
+    const uploadFileDS = api.addLambdaDataSource('UploadFileDS', uploadFileLambda);
+
+    // Create resolvers
+    processQueryDS.createResolver('ProcessQueryResolver', {
+      typeName: 'Query',
+      fieldName: 'processQuery',
+    });
+
+    processQueryDS.createResolver('GetChatHistoryResolver', {
+      typeName: 'Query',
+      fieldName: 'getChatHistory',
+    });
+
+    uploadFileDS.createResolver('UploadFileResolver', {
+      typeName: 'Mutation',
+      fieldName: 'uploadFile',
+    });
+
+    uploadFileDS.createResolver('GetUploadStatusResolver', {
+      typeName: 'Query',
+      fieldName: 'getUploadStatus',
+    });
+
+    // Output AppSync API URL
+    new cdk.CfnOutput(this, 'GraphQLAPIURL', {
+      value: api.graphqlUrl,
+      description: 'AppSync GraphQL API URL',
+    });
+
     // Output important values
     new cdk.CfnOutput(this, 'UserPoolId', {
       value: userPool.userPoolId,
@@ -257,5 +358,64 @@ export class MainStack extends cdk.Stack {
       value: testUserRole.roleArn,
       description: 'Test User Role ARN'
     });
+
+    // Create CloudWatch metrics and alarms
+    const queryExecutionTime = new cloudwatch.Metric({
+      namespace: 'Switchblade',
+      metricName: 'QueryExecutionTime',
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+      dimensionsMap: {
+        Function: 'ProcessQuery'
+      }
+    });
+
+    const queryErrorRate = new cloudwatch.Metric({
+      namespace: 'Switchblade',
+      metricName: 'QueryErrorRate',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+      dimensionsMap: {
+        Function: 'ProcessQuery'
+      }
+    });
+
+    const uploadErrorRate = new cloudwatch.Metric({
+      namespace: 'Switchblade',
+      metricName: 'UploadErrorRate',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+      dimensionsMap: {
+        Function: 'UploadFile'
+      }
+    });
+
+    // Create CloudWatch alarms
+    new cloudwatch.Alarm(this, 'QueryExecutionTimeAlarm', {
+      metric: queryExecutionTime,
+      threshold: 10000, // 10 seconds
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      actionsEnabled: true,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    new cloudwatch.Alarm(this, 'QueryErrorRateAlarm', {
+      metric: queryErrorRate,
+      threshold: 5,
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      actionsEnabled: true,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    new cloudwatch.Alarm(this, 'UploadErrorRateAlarm', {
+      metric: uploadErrorRate,
+      threshold: 5,
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      actionsEnabled: true,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
   }
 } 

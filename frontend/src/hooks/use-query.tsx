@@ -1,4 +1,6 @@
-import { QueryClient, QueryClientProvider, useQuery, useMutation } from '@tanstack/react-query'
+'use client'
+
+import { QueryClient, QueryClientProvider, useQuery, useMutation, UseQueryOptions, UseMutationOptions } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 
 // Create a client
@@ -21,16 +23,25 @@ export function QueryProvider({ children }: { children: ReactNode }) {
 }
 
 // Custom hook for data fetching
-export function useDataQuery<T>(key: string[], queryFn: () => Promise<T>) {
-  return useQuery({
+export function useDataQuery<TData = unknown, TError = unknown>(
+  key: string[],
+  queryFn: () => Promise<TData>,
+  options?: Omit<UseQueryOptions<TData, TError>, 'queryKey' | 'queryFn'>
+) {
+  return useQuery<TData, TError>({
     queryKey: key,
     queryFn,
+    ...options,
   })
 }
 
 // Custom hook for mutations
-export function useDataMutation<T, V>(mutationFn: (data: V) => Promise<T>) {
-  return useMutation({
+export function useDataMutation<TData = unknown, TError = unknown, TVariables = void>(
+  mutationFn: (variables: TVariables) => Promise<TData>,
+  options?: Omit<UseMutationOptions<TData, TError, TVariables>, 'mutationFn'>
+) {
+  return useMutation<TData, TError, TVariables>({
     mutationFn,
+    ...options,
   })
 } 
