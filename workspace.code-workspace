@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"name": "switchblade-athena-api",
+			"path": "."
+		},
+		{
+			"path": "../../code/customer-intake-api/.cursor"
+		}
+	],
+	"settings": {}
+}
