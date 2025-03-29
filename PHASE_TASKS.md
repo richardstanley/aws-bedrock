@@ -3,55 +3,150 @@
 ## Phase 1: Core MVP Setup (Week 1)
 
 ### 1. Development Environment Setup
-- [ ] Set up AWS CDK development environment
-- [ ] Configure AWS credentials
-- [ ] Create development branch
-- [ ] Set up basic Cognito auth
-- [ ] Configure AppSync API
-- [ ] Set up Nova chatbot
+- [ ] Initialize AWS CDK project
+- [ ] Set up TypeScript configuration
+- [ ] Configure development tools
+- [ ] Set up testing environment
+- [ ] Configure CI/CD pipeline
+- [ ] Set up WebSocket extension points
+  - [ ] Configure connection management
+  - [ ] Set up message queuing
+  - [ ] Prepare state synchronization
 
-### 2. Core Services Setup
-- [ ] Create S3 bucket for results
-- [ ] Set up DynamoDB tables
-  - [ ] Chat history
-  - [ ] User preferences
-- [ ] Configure Athena workgroup
+### 2. VPC and Network Configuration
+- [ ] Create VPC with public and private subnets
+- [ ] Configure security groups
+- [ ] Set up NAT Gateway
+- [ ] Configure route tables
+- [ ] Set up VPC endpoints for AWS services
+- [ ] Configure Nova API endpoints
+- [ ] Prepare WebSocket endpoints
+  - [ ] Set up WebSocket API Gateway
+  - [ ] Configure WebSocket routes
+  - [ ] Set up connection management
 
-### 3. Basic Testing Setup
-```typescript
-// test-setup.ts
-async function setupTestEnvironment() {
-  // Set up test resources
-  await createTestBucket();
-  await createTestTables();
-  await createTestUser();
-}
-```
+### 3. Storage Layer Setup
+- [ ] Create S3 bucket for query results
+- [ ] Create S3 bucket for CSV uploads
+- [ ] Configure bucket policies
+- [ ] Set up CORS for S3
+- [ ] Configure S3 event notifications
+- [ ] Set up S3 lifecycle policies
+- [ ] Configure S3 versioning
+
+### 4. Database Layer Setup
+- [ ] Create DynamoDB tables
+  - [ ] Chat history table
+  - [ ] User preferences table
+  - [ ] CSV metadata table
+- [ ] Configure table indexes
+- [ ] Set up table encryption
+- [ ] Configure backup settings
+- [ ] Set up DynamoDB streams
+
+### 5. Nova Integration Setup
+- [ ] Configure Nova API access
+- [ ] Set up knowledge base
+- [ ] Configure model parameters
+- [ ] Set up response formatting
+- [ ] Configure error handling
+- [ ] Set up monitoring
+
+### 6. Athena Setup
+- [ ] Create Athena workgroup
+- [ ] Configure Athena query settings
+- [ ] Set up result location
+- [ ] Configure Athena encryption
+- [ ] Set up Athena monitoring
+- [ ] Configure Athena cost controls
 
 ## Phase 2: Core Integration (Week 2)
 
 ### 1. Nova Integration
-- [ ] Set up basic chat
-- [ ] Configure simple queries
-- [ ] Add error handling
-- [ ] Set up basic logging
+- [ ] Implement chat processing
+- [ ] Set up context management
+- [ ] Configure response formatting
+- [ ] Implement error handling
+- [ ] Set up monitoring
+- [ ] Configure logging
+- [ ] Prepare WebSocket integration
+  - [ ] Set up message handlers
+  - [ ] Configure state sync
+  - [ ] Implement connection recovery
 
-### 2. Query Processing
-- [ ] Implement basic chat
-- [ ] Set up simple queries
-- [ ] Add basic error handling
-- [ ] Configure basic monitoring
+### 2. CSV Upload Integration
+- [ ] Implement S3 upload handler
+  - [ ] Set up presigned URLs
+  - [ ] Configure chunked uploads
+  - [ ] Implement progress tracking
+- [ ] Create Athena table creation logic
+  - [ ] Schema inference
+  - [ ] Table creation
+  - [ ] Status monitoring
+- [ ] Set up schema inference
+  - [ ] CSV header analysis
+  - [ ] Data type detection
+  - [ ] Schema validation
+- [ ] Configure error handling
+  - [ ] Upload errors
+  - [ ] Validation errors
+  - [ ] Processing errors
+- [ ] Implement progress tracking
+  - [ ] Upload progress
+  - [ ] Processing status
+  - [ ] Completion notification
+- [ ] Set up validation
+  - [ ] File type validation
+  - [ ] Size limits
+  - [ ] Content validation
 
-### 3. Testing and Validation
-```typescript
-// test-validation.ts
-async function validateCoreFeatures() {
-  // Test basic functionality
-  await testChat();
-  await testQueries();
-  await testAuth();
-}
-```
+### 3. Core Functionality
+- [ ] Implement chat interface
+- [ ] Set up query processing
+- [ ] Configure result display
+- [ ] Implement error handling
+- [ ] Set up loading states
+- [ ] Configure feedback system
+
+### 4. State Management
+- [ ] Set up chat state
+  - [ ] Message history
+  - [ ] Context management
+  - [ ] User preferences
+- [ ] Configure query state
+  - [ ] Query history
+  - [ ] Results caching
+  - [ ] Pagination state
+- [ ] Implement upload state
+  - [ ] Upload progress
+  - [ ] File validation
+  - [ ] Processing status
+
+### 5. Testing and Refinement
+- [ ] Write unit tests
+  - [ ] Component tests
+  - [ ] State management tests
+  - [ ] API integration tests
+- [ ] Implement integration tests
+  - [ ] End-to-end flows
+  - [ ] Error scenarios
+  - [ ] Edge cases
+- [ ] Set up end-to-end tests
+  - [ ] User workflows
+  - [ ] Data processing
+  - [ ] Error recovery
+- [ ] Configure performance tests
+  - [ ] Load testing
+  - [ ] Response times
+  - [ ] Resource usage
+- [ ] Implement security tests
+  - [ ] Authentication
+  - [ ] Authorization
+  - [ ] Data protection
+- [ ] Set up monitoring tests
+  - [ ] Metrics collection
+  - [ ] Alert triggers
+  - [ ] Log analysis
 
 ## Dependencies and Prerequisites
 
@@ -77,26 +172,72 @@ async function validateCoreFeatures() {
 
 ## Success Criteria
 
-### Infrastructure
-- [ ] Basic AWS services configured
-- [ ] Simple auth working
-- [ ] Basic API accessible
-- [ ] Core storage ready
-
-### Security
-- [ ] Basic auth working
-- [ ] Simple IAM roles set up
-- [ ] Basic encryption enabled
+### Core Functionality
+- [ ] Users can ask questions in plain English
+- [ ] Questions are converted to SQL queries
+- [ ] Results are displayed clearly
+- [ ] Chat history is maintained
+- [ ] CSV files can be uploaded and processed
+- [ ] Athena tables are created automatically
 
 ### Performance
-- [ ] Chat response < 2s
+- [ ] Response time < 2s
 - [ ] Query execution < 3s
+- [ ] CSV upload < 30s for 100MB files
+- [ ] Table creation < 10s
 - [ ] Basic error handling
 
+### Security
+- [ ] User authentication works
+- [ ] Data is encrypted at rest
+- [ ] S3 uploads are secure
+- [ ] Athena queries are protected
+- [ ] Basic access control
+
 ### Monitoring
-- [ ] Simple CloudWatch metrics
-- [ ] Basic error logging
-- [ ] Simple cost tracking
+- [ ] Chat response times tracked
+- [ ] Query execution times monitored
+- [ ] CSV upload progress tracked
+- [ ] Error rates monitored
+- [ ] Basic alerting configured
+
+## Future Enhancements
+
+### 1. Data Manipulation
+- [ ] Row-level editing
+- [ ] Data deletion
+- [ ] Batch operations
+- [ ] Data validation
+
+### 2. Event Processing
+- [ ] SNS topic setup
+- [ ] SQS queue configuration
+- [ ] Zapier integration
+- [ ] Event monitoring
+
+### 3. Performance
+- [ ] Query optimization
+- [ ] Result caching
+- [ ] Advanced monitoring
+- [ ] Performance analytics
+
+### 4. WebSocket Migration
+- [ ] Implement WebSocket server
+  - [ ] Set up connection management
+  - [ ] Configure message routing
+  - [ ] Implement state sync
+- [ ] Add real-time features
+  - [ ] Typing indicators
+  - [ ] Read receipts
+  - [ ] Online status
+- [ ] Enhance performance
+  - [ ] Message compression
+  - [ ] Connection pooling
+  - [ ] Load balancing
+- [ ] Add advanced features
+  - [ ] Binary message support
+  - [ ] File streaming
+  - [ ] Voice messages
 
 ## Testing Strategy
 
