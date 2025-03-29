@@ -31,7 +31,13 @@ export class MainStack extends cdk.Stack {
         {
           expiration: cdk.Duration.days(30)
         }
-      ]
+      ],
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true
+      })
     });
 
     const uploadBucket = new s3.Bucket(this, 'UploadBucket', {
@@ -53,7 +59,13 @@ export class MainStack extends cdk.Stack {
         {
           expiration: cdk.Duration.days(7)
         }
-      ]
+      ],
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true
+      })
     });
 
     // Create DynamoDB tables
@@ -111,6 +123,26 @@ export class MainStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN
     });
 
+    // Create Cognito User Pool Client
+    const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
+      userPool,
+      authFlows: {
+        userPassword: true,
+        adminUserPassword: true,
+        custom: true,
+        userSrp: true
+      },
+      oAuth: {
+        flows: {
+          authorizationCodeGrant: true,
+          implicitCodeGrant: true
+        },
+        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
+        callbackUrls: ['http://localhost:3000/auth/callback'],
+        logoutUrls: ['http://localhost:3000/auth/logout']
+      }
+    });
+
     // Create Athena Workgroup
     const workgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
       name: 'switchblade-workgroup',
@@ -139,6 +171,11 @@ export class MainStack extends cdk.Stack {
       ]
     });
 
+    const testUserRole = new iam.Role(this, 'TestUserRole', {
+      assumedBy: new iam.AccountPrincipal(this.account),
+      roleName: 'switchblade-test-role'
+    });
+
     // Grant permissions to Lambda role
     resultsBucket.grantReadWrite(lambdaRole);
     uploadBucket.grantReadWrite(lambdaRole);
@@ -147,10 +184,63 @@ export class MainStack extends cdk.Stack {
     csvMetadataTable.grantReadWriteData(lambdaRole);
     logGroup.grantWrite(lambdaRole);
 
+    // Create test user policy
+    const testUserPolicy = new iam.Policy(this, 'TestUserPolicy', {
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:PutObject',
+            's3:ListBucket'
+          ],
+          resources: [
+            resultsBucket.bucketArn,
+            `${resultsBucket.bucketArn}/*`,
+            uploadBucket.bucketArn,
+            `${uploadBucket.bucketArn}/*`
+          ]
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'dynamodb:GetItem',
+            'dynamodb:PutItem',
+            'dynamodb:Query',
+            'dynamodb:Scan'
+          ],
+          resources: [chatHistoryTable.tableArn]
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'athena:StartQueryExecution',
+            'athena:GetQueryExecution',
+            'athena:GetQueryResults'
+          ],
+          resources: [`arn:aws:athena:${this.region}:${this.account}:workgroup/${workgroup.name}`]
+        })
+      ]
+    });
+
+    // Attach policy to role
+    testUserPolicy.attachToRole(testUserRole);
+
+    // Grant permissions to test role
+    resultsBucket.grantReadWrite(testUserRole);
+    uploadBucket.grantReadWrite(testUserRole);
+    chatHistoryTable.grantReadWriteData(testUserRole);
+    logGroup.grantWrite(testUserRole);
+
     // Output important values
     new cdk.CfnOutput(this, 'UserPoolId', {
       value: userPool.userPoolId,
       description: 'Cognito User Pool ID'
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID'
     });
 
     new cdk.CfnOutput(this, 'ResultsBucketName', {
@@ -161,6 +251,11 @@ export class MainStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UploadBucketName', {
       value: uploadBucket.bucketName,
       description: 'S3 Bucket for CSV Uploads'
+    });
+
+    new cdk.CfnOutput(this, 'TestUserRoleArn', {
+      value: testUserRole.roleArn,
+      description: 'Test User Role ARN'
     });
   }
 } 

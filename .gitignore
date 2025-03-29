@@ -1,15 +1,12 @@
-
-# CDK asset staging directory
-.cdk.staging
+# CDK
+.cdk.staging/
 cdk.out/
 cdk.context.json
-cdk-outputs.json
 
-# TypeScript build output
+# TypeScript
 dist/
 build/
 *.tsbuildinfo
-*.js.map
 
 # Node.js
 node_modules/
@@ -24,13 +21,16 @@ yarn-error.log*
 *.swp
 *.swo
 .DS_Store
+*.pem
 
 # Environment variables
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# AWS credentials and config
+# AWS credentials
 .aws/
 aws.config.json
 
@@ -43,13 +43,37 @@ coverage/
 .nyc_output/
 
 # Build artifacts
-.cache/
-.npm/
-.eslintcache
+.next/
+out/
+build/
+dist/
 
-# Temporary files
-*.tmp
-*.temp
+# Frontend specific
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/node_modules/
+frontend/coverage/
+frontend/.nyc_output/
+
+# Misc
+.DS_Store
+*.pem
+.cache/
+.temp/
+.tmp/
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out/
+cdk.context.json
+cdk-outputs.json
 
 # Output of 'npm pack'
 *.tgz
@@ -59,17 +83,11 @@ coverage/
 
 # dotenv environment variable files
 .env
-.env.development.local
-.env.test.local
-.env.production.local
 .env.local
+.env.*.local
 
 # parcel-bundler cache (https://parceljs.org/)
 .parcel-cache
-
-# Next.js build output
-.next
-out
 
 # Serverless directories
 .serverless/
