@@ -12,7 +12,8 @@
     "cdk": "cdk",
     "deploy": "npm run build:lambda && cdk deploy",
     "deploy:sunnyhill": "npm run build:lambda && ./scripts/deploy.sh",
-    "destroy": "cdk destroy"
+    "destroy": "cdk destroy",
+    "setup:test-user": "ts-node scripts/setup-test-user.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.11",
