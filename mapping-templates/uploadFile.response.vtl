@@ -1,0 +1,16 @@
+#if($ctx.error)
+  $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#set($fileId = $ctx.result.fileId)
+#set($bucket = $util.env.UPLOAD_BUCKET)
+#set($key = "uploads/${ctx.args.input.userId}/${fileId}/${ctx.args.input.fileName}")
+
+#set($url = $util.time.nowISO8601())
+#set($expiration = $util.time.parseISO8601($url).plusSeconds(3600).toString())
+
+{
+  "fileId": "${fileId}",
+  "uploadUrl": "${url}",
+  "status": "PENDING"
+} 

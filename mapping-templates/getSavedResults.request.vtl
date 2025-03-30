@@ -1,0 +1,13 @@
+{
+  "version": "2018-05-29",
+  "operation": "Query",
+  "query": {
+    "expression": "userId = :userId",
+    "expressionValues": {
+      ":userId": $util.dynamodb.toDynamoDBJson($ctx.args.userId)
+    }
+  },
+  "scanIndexForward": false,
+  "limit": $util.defaultIfNull($ctx.args.limit, 50),
+  "nextToken": $util.toJson($util.defaultIfNull($ctx.args.nextToken, null))
+} 

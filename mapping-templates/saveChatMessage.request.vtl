@@ -1,0 +1,23 @@
+#if($ctx.error)
+  $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#if(!$ctx.args.input.userId || !$ctx.args.input.question)
+  $util.error("userId and question are required", "ValidationError")
+#end
+
+{
+  "version": "2018-05-29",
+  "operation": "PutItem",
+  "key": {
+    "userId": $util.dynamodb.toDynamoDBJson($ctx.args.input.userId),
+    "timestamp": $util.dynamodb.toDynamoDBJson($util.time.nowEpochMilliSeconds())
+  },
+  "attributeValues": {
+    "messageId": $util.dynamodb.toDynamoDBJson($util.autoId()),
+    "question": $util.dynamodb.toDynamoDBJson($ctx.args.input.question),
+    "answer": $util.dynamodb.toDynamoDBJson($util.defaultIfNull($ctx.args.input.answer, null)),
+    "status": $util.dynamodb.toDynamoDBJson($util.defaultIfNull($ctx.args.input.status, "PENDING")),
+    "error": $util.dynamodb.toDynamoDBJson($util.defaultIfNull($ctx.args.input.error, null))
+  }
+} 

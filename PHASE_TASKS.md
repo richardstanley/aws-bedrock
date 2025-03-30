@@ -16,6 +16,16 @@
 - [x] Basic error handling
 - [x] Simple logging
 - [x] Basic monitoring
+- [x] AWS Bedrock Nova Micro setup
+- [x] AWS Bedrock Nova Micro model configuration
+- [x] AWS Bedrock Nova Micro IAM role setup
+- [x] AWS Bedrock Nova Micro error handling
+- [x] AWS Bedrock Nova Micro response validation
+- [x] AWS Bedrock Nova Micro cost monitoring
+- [x] Remove unneeded SNS topic and email subscription
+- [x] Remove unneeded User Preferences DynamoDB table
+- [x] Move test user role and policy to separate test stack
+- [x] Clean up unused IAM permissions
 
 ### Frontend Setup
 - [x] Next.js project setup
@@ -36,7 +46,7 @@
 ## Phase 2: Core Features
 
 ### Backend Features
-- [x] Nova API integration
+- [x] AWS Bedrock Nova Micro integration
 - [x] Basic query processing
 - [x] Simple file processing
 - [x] Basic input validation
@@ -57,7 +67,7 @@
 - [x] Error state handling
 - [x] Authentication state management
 
-## Phase 3: Testing and Documentation
+## Phase 3: Further Refinements and Testing
 
 ### Testing
 - [x] Basic unit tests
@@ -67,16 +77,13 @@
 - [x] Authentication tests
 - [x] File upload tests
 - [x] Query processing tests
-- [ ] Direct S3 upload tests
-- [ ] AppSync S3 upload tests
-- [ ] AppSync direct Bedrock integration tests
-- [ ] AppSync direct Athena integration tests
-- [ ] Glue schema detection tests
-- [ ] S3 event trigger tests
-- [ ] Service IAM role tests
-- [ ] Upload path comparison tests
-- [ ] Query result saving tests
-- [ ] Saved results retrieval tests
+- [x] Direct S3 upload tests
+- [x] AppSync S3 upload tests
+- [x] AppSync direct Bedrock integration tests
+- [x] AppSync direct Athena integration tests
+- [x] Service IAM role tests
+- [x] Query result saving tests
+- [x] Saved results retrieval tests
 
 ### Documentation
 - [x] Basic API documentation
@@ -86,41 +93,33 @@
 - [x] Simple troubleshooting guide
 - [x] API schema documentation
 - [x] Infrastructure setup guide
-- [ ] Direct S3 upload guide
-- [ ] AppSync S3 upload guide
-- [ ] AppSync direct Bedrock integration guide
-- [ ] AppSync direct Athena integration guide
-- [ ] Glue schema detection guide
-- [ ] S3 event trigger guide
-- [ ] Service IAM role guide
-- [ ] Upload path selection guide
-- [ ] Query result saving guide
+- [x] Direct S3 upload guide
+- [x] AppSync S3 upload guide
+- [x] AppSync direct Bedrock integration guide
+- [x] AppSync direct Athena integration guide
+- [x] Service IAM role guide
+- [x] Query result saving guide
 
 ### Integration
-- [ ] Direct S3 upload setup
-- [ ] Direct S3 IAM role setup
-- [ ] AppSync direct S3 integration setup
-- [ ] AppSync direct Bedrock integration setup
-- [ ] AppSync direct Athena integration setup
-- [ ] AppSync IAM role setup
-- [ ] AppSync error handling
-- [ ] AppSync monitoring setup
-- [ ] Glue crawler setup
-- [ ] Glue schema detection
-- [ ] Glue IAM role setup
-- [ ] Glue monitoring setup
-- [ ] S3 event trigger setup
-- [ ] S3 IAM role setup
-- [ ] Athena table auto-creation
-- [ ] Athena IAM role setup
-- [ ] Athena error handling
-- [ ] Athena monitoring setup
-- [ ] Athena cost optimization
-- [ ] Bedrock IAM role setup
-- [ ] DynamoDB IAM role setup
-- [ ] Upload path monitoring setup
-- [ ] Query result saving setup
-- [ ] Saved results DynamoDB table setup
+- [x] Direct S3 upload setup
+- [x] Direct S3 IAM role setup
+- [x] AppSync direct S3 integration setup
+- [x] AWS Bedrock Nova Micro integration setup
+- [x] AppSync direct Athena integration setup
+- [x] AppSync IAM role setup
+- [x] AppSync error handling
+- [x] AppSync monitoring setup
+- [x] Athena table auto-creation
+- [x] Athena IAM role setup
+- [x] Athena error handling
+- [x] Athena monitoring setup
+- [x] Athena cost optimization
+- [x] AWS Bedrock Nova Micro IAM role setup
+- [x] DynamoDB IAM role setup
+- [x] Query result saving setup
+- [x] Saved results DynamoDB table setup
+- [x] Remove unused SNS integrations
+- [x] Remove unused DynamoDB table references
 
 ## Success Criteria
 
@@ -143,7 +142,7 @@
 - [x] Basic error handling
 - [x] Query result caching
 - [x] File upload progress tracking
-- [x] Bedrock response time < 1s
+- [x] Bedrock Nova Micro response time < 1s
 
 ### Cost Optimization
 - [x] Using Bedrock Nova Micro for maximum cost efficiency
@@ -332,103 +331,182 @@ graph TD
     class Monitoring,CloudWatch,Alerts monitoring;
 ```
 
+## Implemented Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph Frontend["Frontend (Next.js)"]
+        UI[User Interface]
+        Auth[Authentication]
+        Upload[File Upload]
+        Query[Query Interface]
+        Results[Results Display]
+        SavedResults[Saved Results]
+    end
+
+    subgraph API["API Layer (AppSync)"]
+        GraphQL[GraphQL API]
+        Resolvers[AppSync Resolvers]
+    end
+
+    subgraph Processing["Processing Layer"]
+        Bedrock[Bedrock Nova Micro]
+        Athena[Athena]
+    end
+
+    subgraph Storage["Storage Layer"]
+        S3Upload[Upload Bucket]
+        S3Results[Results Bucket]
+        DynamoDB[(DynamoDB Tables)]
+    end
+
+    subgraph Security["Security Layer"]
+        Cognito[Cognito]
+        IAM[IAM Roles]
+    end
+
+    subgraph Monitoring["Monitoring Layer"]
+        CloudWatch[CloudWatch]
+        Alerts[Alerts]
+    end
+
+    %% Frontend Connections
+    UI --> Auth
+    UI --> Upload
+    UI --> Query
+    Query --> Results
+    Results --> SavedResults
+    Auth --> Cognito
+    Upload --> Cognito
+    Query --> Cognito
+    Upload --> S3Upload
+
+    %% API Layer Connections
+    UI --> GraphQL
+    GraphQL --> Cognito
+    Upload --> GraphQL
+    GraphQL --> S3Upload
+    GraphQL --> Bedrock
+    GraphQL --> Athena
+    GraphQL --> DynamoDB
+    Athena --> GraphQL
+    GraphQL --> Results
+    GraphQL --> SavedResults
+    Resolvers --> GraphQL
+
+    %% Processing Layer Connections
+    S3Upload --> Athena
+    GraphQL --> Bedrock
+    Bedrock --> Athena
+    Athena --> S3Results
+
+    %% Storage Layer Connections
+    Athena --> S3Results
+    S3Results --> DynamoDB
+    Results --> DynamoDB
+    SavedResults --> DynamoDB
+
+    %% Security Layer Connections
+    Cognito --> IAM
+    GraphQL --> IAM
+    S3Upload --> IAM
+    S3Results --> IAM
+    Athena --> IAM
+    Bedrock --> IAM
+    DynamoDB --> IAM
+
+    %% Monitoring Layer Connections
+    GraphQL --> CloudWatch
+    Athena --> CloudWatch
+    CloudWatch --> Alerts
+    S3Upload --> CloudWatch
+    S3Results --> CloudWatch
+    Bedrock --> CloudWatch
+    Cognito --> CloudWatch
+
+    %% Styling
+    classDef frontend fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef api fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef processing fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef storage fill:#fbb,stroke:#333,stroke-width:2px;
+    classDef security fill:#fbf,stroke:#333,stroke-width:2px;
+    classDef monitoring fill:#bff,stroke:#333,stroke-width:2px;
+
+    class Frontend,UI,Auth,Upload,Query,Results,SavedResults frontend;
+    class API,GraphQL,Resolvers api;
+    class Processing,Bedrock,Athena processing;
+    class Storage,S3Upload,S3Results,DynamoDB storage;
+    class Security,Cognito,IAM security;
+    class Monitoring,CloudWatch,Alerts monitoring;
+```
+
 ## User Functionality Checklist
 
 ### File Management
-- [ ] Upload CSV files directly to S3
-- [ ] Upload CSV files through chat interface
-- [ ] View upload progress in real-time
-- [ ] See file size and type validation feedback
-- [ ] View list of uploaded files
+- [x] Upload CSV files directly to S3
+- [x] Upload CSV files through chat interface
+- [x] View upload progress in real-time
+- [x] See file size and type validation feedback
+- [x] View list of uploaded files
 - [ ] Delete uploaded files
-- [ ] Track file processing status
-- [ ] View file metadata (size, upload date, status)
+- [x] Track file processing status
+- [x] View file metadata (size, upload date, status)
 - [ ] Download processed files
-- [ ] Share files with other users
 
 ### Query Interface
-- [ ] Ask questions in plain English
-- [ ] View generated SQL query
-- [ ] Edit generated SQL query
-- [ ] Save frequently used queries
-- [ ] View query history
-- [ ] Cancel long-running queries
-- [ ] See query execution status
-- [ ] Export query results
-- [ ] Share queries with other users
-- [ ] View query performance metrics
+- [x] Ask questions in plain English
+- [x] View generated SQL query
+- [x] Edit generated SQL query
+- [x] Save frequently used queries
+- [x] View query history
+- [x] Cancel long-running queries
+- [x] See query execution status
+- [x] Export query results
+- [x] View query performance metrics
 
 ### Results Display
-- [ ] View query results in table format
+- [x] View query results in table format
 - [ ] Sort results by columns
 - [ ] Filter results
 - [ ] Export results to CSV
-- [ ] Save results for later
-- [ ] View saved results
-- [ ] Share results with others
+- [x] Save results for later
+- [x] View saved results
 - [ ] Download results
 - [ ] View result statistics
 - [ ] Customize result display
 
 ### Chat Experience
-- [ ] Start new chat sessions
-- [ ] View chat history
-- [ ] Continue previous chats
+- [x] Start new chat sessions
+- [x] View chat history
+- [x] Continue previous chats
 - [ ] Save important chat messages
 - [ ] Export chat history
-- [ ] Share chat sessions
-- [ ] View file context in chats
+- [x] View file context in chats
 - [ ] Search through chat history
 - [ ] Clear chat history
 - [ ] Archive old chats
 
 ### User Account
-- [ ] Create new account
-- [ ] Sign in to account
-- [ ] Reset password
+- [x] Create new account
+- [x] Sign in to account
+- [x] Reset password
 - [ ] Update profile information
 - [ ] View account usage statistics
-- [ ] Manage API keys
 - [ ] Set notification preferences
 - [ ] View billing information
 - [ ] Delete account
-- [ ] Transfer account ownership
 
 ### Data Management
-- [ ] View data schema
-- [ ] Preview data before querying
+- [x] View data schema
+- [x] Preview data before querying
 - [ ] Clean and transform data
 - [ ] Schedule data updates
 - [ ] Set data retention policies
 - [ ] View data lineage
-- [ ] Track data changes
+- [x] Track data changes
 - [ ] Restore previous versions
 - [ ] Validate data quality
 - [ ] Set data sharing permissions
-
-### Visualization
-- [ ] View basic data charts
-- [ ] Create custom visualizations
-- [ ] Save visualization templates
-- [ ] Share visualizations
-- [ ] Export visualizations
-- [ ] Customize chart settings
-- [ ] View multiple charts
-- [ ] Create dashboards
-- [ ] Schedule chart updates
-- [ ] Compare data across charts
-
-### Collaboration
-- [ ] Share queries with team
-- [ ] Share results with team
-- [ ] Comment on queries
-- [ ] Comment on results
-- [ ] View team activity
-- [ ] Set team permissions
-- [ ] Create team workspaces
-- [ ] Invite team members
-- [ ] Manage team roles
-- [ ] Track team usage
 
 ### Notifications
 - [ ] Get query completion alerts

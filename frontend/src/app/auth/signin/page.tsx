@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function SignIn() {
   const [username, setUsername] = useState('');
@@ -10,7 +10,7 @@ export default function SignIn() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,10 +18,10 @@ export default function SignIn() {
     setIsLoading(true);
 
     try {
-      await signIn(username, password);
-      router.push('/');
+      await login(username, password);
+      router.push('/dashboard');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'An error occurred during sign in');
+      setError(error instanceof Error ? error.message : 'Authentication failed');
     } finally {
       setIsLoading(false);
     }

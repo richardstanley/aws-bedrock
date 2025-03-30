@@ -1,0 +1,11 @@
+{
+  "version": "2018-05-29",
+  "operation": "StartQueryExecution",
+  "payload": {
+    "QueryString": $util.toJson($ctx.args.input.query),
+    "WorkGroup": $util.env.ATHENA_WORKGROUP,
+    "ResultConfiguration": {
+      "OutputLocation": "s3://${util.env.RESULTS_BUCKET}/athena-results/"
+    }
+  }
+} 

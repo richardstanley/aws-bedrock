@@ -1,0 +1,14 @@
+{
+  "version": "2018-05-29",
+  "operation": "PutItem",
+  "key": {
+    "userId": $util.dynamodb.toDynamoDBJson($ctx.args.input.userId),
+    "fileId": $util.dynamodb.toDynamoDBJson($util.autoId())
+  },
+  "attributeValues": {
+    "fileName": $util.dynamodb.toDynamoDBJson($ctx.args.input.fileName),
+    "fileType": $util.dynamodb.toDynamoDBJson($ctx.args.input.fileType),
+    "status": $util.dynamodb.toDynamoDBJson("PENDING"),
+    "timestamp": $util.dynamodb.toDynamoDBJson($util.time.nowEpochMilliSeconds())
+  }
+} 

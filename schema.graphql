@@ -1,12 +1,17 @@
 type Query {
   processQuery(input: ProcessQueryInput!): ProcessQueryResponse!
+  executeQuery(input: ExecuteQueryInput!): ExecuteQueryResponse!
   getChatHistory(userId: String!): [ChatMessage!]!
   getUploadStatus(fileId: String!): UploadStatus!
+  getSavedResults(userId: String!, limit: Int, nextToken: String): SavedResultConnection!
+  getQueryStatus(queryId: String!): QueryStatus!
 }
 
 type Mutation {
   uploadFile(input: UploadFileInput!): UploadFileResponse!
   saveChatMessage(input: SaveChatMessageInput!): ChatMessage!
+  saveQueryResult(input: SaveQueryResultInput!): SavedResult!
+  deleteSavedResult(userId: String!, resultId: String!): Boolean!
 }
 
 input ProcessQueryInput {
@@ -14,7 +19,19 @@ input ProcessQueryInput {
   userId: String!
 }
 
+input ExecuteQueryInput {
+  query: String!
+  userId: String!
+}
+
 type ProcessQueryResponse {
+  queryId: String!
+  status: String!
+  results: QueryResult
+  error: String
+}
+
+type ExecuteQueryResponse {
   queryId: String!
   status: String!
   results: QueryResult
@@ -63,4 +80,33 @@ input SaveChatMessageInput {
   answer: String
   status: String!
   error: String
+}
+
+type SavedResult {
+  userId: String!
+  resultId: String!
+  query: String!
+  result: String!
+  createdAt: AWSDateTime!
+  expiresAt: AWSDateTime
+}
+
+type SavedResultConnection {
+  items: [SavedResult!]!
+  nextToken: String
+}
+
+input SaveQueryResultInput {
+  userId: String!
+  query: String!
+  result: String!
+  expiresAt: AWSDateTime
+}
+
+type QueryStatus {
+  queryId: String!
+  status: String!
+  results: QueryResult
+  error: String
+  timestamp: AWSDateTime!
 } 

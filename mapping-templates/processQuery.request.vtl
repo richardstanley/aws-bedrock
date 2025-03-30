@@ -1,0 +1,33 @@
+#if($ctx.error)
+  $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#if(!$ctx.args.input.question)
+  $util.error("Question is required", "ValidationError")
+#end
+
+#set($modelId = "anthropic.claude-3-sonnet-20240229-v1:0")
+#set($prompt = $ctx.args.input.question)
+
+{
+  "version": "2018-05-29",
+  "method": "POST",
+  "resourcePath": "/model/$modelId/invoke",
+  "params": {
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "anthropic_version": "bedrock-2023-05-31",
+      "max_tokens": 512,
+      "messages": [
+        {
+          "role": "user",
+          "content": "You are a helpful assistant that converts natural language questions into SQL queries. Always respond with valid SQL queries only. Question: $prompt"
+        }
+      ],
+      "temperature": 0.1,
+      "top_p": 0.95
+    }
+  }
+} 

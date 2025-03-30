@@ -3,34 +3,99 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as athena from 'aws-cdk-lib/aws-athena';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as appsync from 'aws-cdk-lib/aws-appsync';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
+import { BedrockConstruct } from '../constructs/bedrock-construct';
+import { AthenaConstruct } from '../constructs/athena-construct';
+import { IamConstruct } from '../constructs/iam-construct';
 
 export class MainStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Create SNS topic for alerts
-    const alertTopic = new sns.Topic(this, 'AlertTopic', {
-      displayName: 'Switchblade Alerts',
+    // Create CloudWatch metrics and alarms
+    const queryLatency = new cloudwatch.Metric({
+      namespace: 'Switchblade',
+      metricName: 'QueryLatency',
+      statistic: 'Average',
+      period: cdk.Duration.minutes(1)
     });
 
-    // Add email subscription to the topic
-    alertTopic.addSubscription(
-      new subscriptions.EmailSubscription('your-email@example.com')
-    );
+    // Create CloudWatch alarm for high latency
+    new cloudwatch.Alarm(this, 'QueryHighLatencyAlarm', {
+      metric: queryLatency,
+      threshold: 3000, // 3 seconds
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
+      alarmDescription: 'Query execution time is too high'
+    });
+
+    // Create CloudWatch metrics for errors
+    const errorRate = new cloudwatch.Metric({
+      namespace: 'Switchblade',
+      metricName: 'ErrorRate',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(1)
+    });
+
+    // Create CloudWatch alarm for high error rate
+    new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
+      metric: errorRate,
+      threshold: 10,
+      evaluationPeriods: 5,
+      datapointsToAlarm: 3,
+      alarmDescription: 'Error rate is too high'
+    });
+
+    // Create CloudWatch alarm for Bedrock errors
+    new cloudwatch.Alarm(this, 'BedrockErrorAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Bedrock',
+        metricName: 'InvokeModelError',
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(1)
+      }),
+      threshold: 5,
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
+      alarmDescription: 'Bedrock model invocation errors are too high'
+    });
+
+    // Create CloudWatch alarm for Athena errors
+    new cloudwatch.Alarm(this, 'AthenaErrorAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Athena',
+        metricName: 'QueryExecutionError',
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(1)
+      }),
+      threshold: 5,
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
+      alarmDescription: 'Athena query execution errors are too high'
+    });
+
+    // Create CloudWatch Log Group for application logs
+    const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
+      logGroupName: '/aws/lambda/switchblade',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    // Create Bedrock construct
+    const bedrock = new BedrockConstruct(this, 'Bedrock', {
+      logGroup
+    });
 
     // Create S3 buckets
     const resultsBucket = new s3.Bucket(this, 'QueryResultsBucket', {
       bucketName: `query-results-${this.account}-${this.region}`,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       cors: [
         {
@@ -58,7 +123,8 @@ export class MainStack extends cdk.Stack {
 
     const uploadBucket = new s3.Bucket(this, 'UploadBucket', {
       bucketName: `csv-uploads-${this.account}-${this.region}`,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       cors: [
         {
@@ -84,34 +150,61 @@ export class MainStack extends cdk.Stack {
       })
     });
 
-    // Create DynamoDB tables
+    // Create Athena construct
+    const athena = new AthenaConstruct(this, 'Athena', {
+      resultsBucket,
+      logGroup
+    });
+
+    // Create DynamoDB table with GSI
     const chatHistoryTable = new dynamodb.Table(this, 'ChatHistoryTable', {
-      tableName: 'chat-history',
+      tableName: `chat-history-${this.account}-${this.region}`,
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       pointInTimeRecovery: true,
-      encryption: dynamodb.TableEncryption.AWS_MANAGED
-    });
-
-    const userPreferencesTable = new dynamodb.Table(this, 'UserPreferencesTable', {
-      tableName: 'user-preferences',
-      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      pointInTimeRecovery: true,
-      encryption: dynamodb.TableEncryption.AWS_MANAGED
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      // @ts-ignore - CDK type definitions are outdated
+      globalSecondaryIndexes: {
+        'userId-timestamp-index': {
+          partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+          sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+          projectionType: dynamodb.ProjectionType.ALL
+        }
+      }
     });
 
     const csvMetadataTable = new dynamodb.Table(this, 'CsvMetadataTable', {
-      tableName: 'csv-metadata',
+      tableName: `csv-metadata-${this.account}-${this.region}`,
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'fileId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       pointInTimeRecovery: true,
       encryption: dynamodb.TableEncryption.AWS_MANAGED
+    });
+
+    const savedResultsTable = new dynamodb.Table(this, 'SavedResultsTable', {
+      tableName: `saved-results-${this.account}-${this.region}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'resultId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      pointInTimeRecovery: true,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'ttl'
+    });
+
+    const queryStatusTable = new dynamodb.Table(this, 'QueryStatusTable', {
+      tableName: `query-status-${this.account}-${this.region}`,
+      partitionKey: { name: 'queryId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      pointInTimeRecovery: true,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'ttl'
     });
 
     // Create Cognito User Pool
@@ -136,7 +229,7 @@ export class MainStack extends cdk.Stack {
         requireSymbols: true
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
     // Create Cognito User Pool Client
@@ -159,96 +252,8 @@ export class MainStack extends cdk.Stack {
       }
     });
 
-    // Create Athena Workgroup
-    const workgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
-      name: 'switchblade-workgroup',
-      recursiveDeleteOption: false,
-      state: 'ENABLED',
-      workGroupConfiguration: {
-        requesterPaysEnabled: false,
-        resultConfiguration: {
-          outputLocation: `s3://${resultsBucket.bucketName}/athena-results/`
-        }
-      }
-    });
-
-    // Create CloudWatch Log Group
-    const logGroup = new logs.LogGroup(this, 'ApplicationLogs', {
-      logGroupName: '/switchblade/application',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      retention: logs.RetentionDays.ONE_MONTH
-    });
-
-    // Create IAM roles and policies
-    const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
-      ]
-    });
-
-    const testUserRole = new iam.Role(this, 'TestUserRole', {
-      assumedBy: new iam.AccountPrincipal(this.account),
-      roleName: 'switchblade-test-role'
-    });
-
-    // Grant permissions to Lambda role
-    resultsBucket.grantReadWrite(lambdaRole);
-    uploadBucket.grantReadWrite(lambdaRole);
-    chatHistoryTable.grantReadWriteData(lambdaRole);
-    userPreferencesTable.grantReadWriteData(lambdaRole);
-    csvMetadataTable.grantReadWriteData(lambdaRole);
-    logGroup.grantWrite(lambdaRole);
-
-    // Create test user policy
-    const testUserPolicy = new iam.Policy(this, 'TestUserPolicy', {
-      statements: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:GetObject',
-            's3:PutObject',
-            's3:ListBucket'
-          ],
-          resources: [
-            resultsBucket.bucketArn,
-            `${resultsBucket.bucketArn}/*`,
-            uploadBucket.bucketArn,
-            `${uploadBucket.bucketArn}/*`
-          ]
-        }),
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'dynamodb:GetItem',
-            'dynamodb:PutItem',
-            'dynamodb:Query',
-            'dynamodb:Scan'
-          ],
-          resources: [chatHistoryTable.tableArn]
-        }),
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'athena:StartQueryExecution',
-            'athena:GetQueryExecution',
-            'athena:GetQueryResults'
-          ],
-          resources: [`arn:aws:athena:${this.region}:${this.account}:workgroup/${workgroup.name}`]
-        })
-      ]
-    });
-
-    // Attach policy to role
-    testUserPolicy.attachToRole(testUserRole);
-
-    // Grant permissions to test role
-    resultsBucket.grantReadWrite(testUserRole);
-    uploadBucket.grantReadWrite(testUserRole);
-    chatHistoryTable.grantReadWriteData(testUserRole);
-    logGroup.grantWrite(testUserRole);
-
     // Create AppSync API
+    // @ts-ignore - CDK type definitions are outdated
     const api = new appsync.GraphqlApi(this, 'SwitchbladeApi', {
       name: 'switchblade-api',
       definition: appsync.Definition.fromFile('schema.graphql'),
@@ -266,74 +271,229 @@ export class MainStack extends cdk.Stack {
         ],
       },
       xrayEnabled: true,
+      // @ts-ignore - CDK type definitions are outdated
+      cors: {
+        allowedOrigins: ['http://localhost:3000'],
+        allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['*'],
+        maxAge: cdk.Duration.days(1)
+      }
     });
 
-    // Create Lambda functions for resolvers
-    const processQueryLambda = new lambda.Function(this, 'ProcessQueryFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'dist/index.handler',
-      code: lambda.Code.fromAsset('lambda/process-query'),
-      environment: {
-        NOVA_API_KEY: process.env.NOVA_API_KEY || '',
-        ATHENA_WORKGROUP: workgroup.name,
-        RESULTS_BUCKET: resultsBucket.bucketName,
-      },
-      timeout: cdk.Duration.seconds(30),
+    // Create IAM construct
+    const iamConstruct = new IamConstruct(this, 'IamConstruct', {
+      resultsBucket,
+      uploadBucket,
+      chatHistoryTable,
+      csvMetadataTable,
+      savedResultsTable,
+      queryStatusTable,
+      logGroup,
+      bedrock,
+      athena,
+      api
     });
 
-    const uploadFileLambda = new lambda.Function(this, 'UploadFileFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'dist/index.handler',
-      code: lambda.Code.fromAsset('lambda/upload-file'),
-      environment: {
-        UPLOAD_BUCKET: uploadBucket.bucketName,
-        ATHENA_WORKGROUP: workgroup.name,
-      },
-      timeout: cdk.Duration.seconds(30),
+    // Create AppSync data sources
+    const s3DataSource = api.addHttpDataSource('S3DataSource', 'https://s3.amazonaws.com', {
+      authorizationConfig: {
+        signingRegion: this.region,
+        signingServiceName: 's3'
+      }
     });
 
-    // Grant permissions to Lambda functions
-    resultsBucket.grantReadWrite(processQueryLambda);
-    uploadBucket.grantReadWrite(uploadFileLambda);
-    chatHistoryTable.grantReadWriteData(processQueryLambda);
-    csvMetadataTable.grantReadWriteData(uploadFileLambda);
-
-    // Grant CloudWatch Logs permissions
-    logGroup.grantWrite(processQueryLambda);
-    logGroup.grantWrite(uploadFileLambda);
-
-    // Add AppSync resolvers
-    const processQueryDS = api.addLambdaDataSource('ProcessQueryDS', processQueryLambda);
-    const uploadFileDS = api.addLambdaDataSource('UploadFileDS', uploadFileLambda);
-
-    // Create resolvers
-    processQueryDS.createResolver('ProcessQueryResolver', {
-      typeName: 'Query',
-      fieldName: 'processQuery',
+    // Create Athena data source
+    const athenaDataSource = api.addHttpDataSource('AthenaDataSource', 'https://athena.us-west-2.amazonaws.com', {
+      authorizationConfig: {
+        signingRegion: this.region,
+        signingServiceName: 'athena'
+      }
     });
 
-    processQueryDS.createResolver('GetChatHistoryResolver', {
-      typeName: 'Query',
-      fieldName: 'getChatHistory',
+    // Create Bedrock data source
+    const bedrockDataSource = api.addHttpDataSource('BedrockDataSource', 'https://bedrock-runtime.us-west-2.amazonaws.com', {
+      authorizationConfig: {
+        signingRegion: this.region,
+        signingServiceName: 'bedrock'
+      }
     });
 
-    uploadFileDS.createResolver('UploadFileResolver', {
+    // Add Nova Micro specific permissions
+    const bedrockRole = new iam.Role(this, 'BedrockDataSourceRole', {
+      assumedBy: new iam.ServicePrincipal('appsync.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSAppSyncPushToCloudWatchLogs')
+      ]
+    });
+
+    bedrockRole.addToPrincipalPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'bedrock:InvokeModel',
+        'bedrock:ListFoundationModels'
+      ],
+      resources: [
+        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`
+      ]
+    }));
+
+    // Add CloudWatch logging for Nova Micro
+    bedrockRole.addToPrincipalPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents'
+      ],
+      resources: [logGroup.logGroupArn + ':*']
+    }));
+
+    const chatHistoryDataSource = api.addDynamoDbDataSource('ChatHistoryDataSource', chatHistoryTable);
+    const csvMetadataDataSource = api.addDynamoDbDataSource('CsvMetadataDataSource', csvMetadataTable);
+    const savedResultsDataSource = api.addDynamoDbDataSource('SavedResultsDataSource', savedResultsTable);
+    const queryStatusDataSource = api.addDynamoDbDataSource('QueryStatusDataSource', queryStatusTable);
+
+    // Create roles for data sources
+    const chatHistoryRole = new iam.Role(this, 'ChatHistoryDataSourceRole', {
+      assumedBy: new iam.ServicePrincipal('appsync.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSAppSyncPushToCloudWatchLogs')
+      ]
+    });
+
+    const csvMetadataRole = new iam.Role(this, 'CsvMetadataDataSourceRole', {
+      assumedBy: new iam.ServicePrincipal('appsync.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSAppSyncPushToCloudWatchLogs')
+      ]
+    });
+
+    const savedResultsRole = new iam.Role(this, 'SavedResultsDataSourceRole', {
+      assumedBy: new iam.ServicePrincipal('appsync.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSAppSyncPushToCloudWatchLogs')
+      ]
+    });
+
+    const queryStatusRole = new iam.Role(this, 'QueryStatusDataSourceRole', {
+      assumedBy: new iam.ServicePrincipal('appsync.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSAppSyncPushToCloudWatchLogs')
+      ]
+    });
+
+    // Grant DynamoDB permissions to data source roles
+    const dataSourceRolePolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+        'dynamodb:Query',
+        'dynamodb:Scan'
+      ],
+      resources: [
+        chatHistoryTable.tableArn,
+        chatHistoryTable.tableArn + '/index/userId-timestamp-index',
+        csvMetadataTable.tableArn,
+        savedResultsTable.tableArn,
+        queryStatusTable.tableArn
+      ]
+    });
+
+    // Grant permissions to each data source role
+    chatHistoryRole.addToPrincipalPolicy(dataSourceRolePolicy);
+    csvMetadataRole.addToPrincipalPolicy(dataSourceRolePolicy);
+    savedResultsRole.addToPrincipalPolicy(dataSourceRolePolicy);
+    queryStatusRole.addToPrincipalPolicy(dataSourceRolePolicy);
+
+    // Attach roles to data sources
+    chatHistoryDataSource.ds.serviceRoleArn = chatHistoryRole.roleArn;
+    csvMetadataDataSource.ds.serviceRoleArn = csvMetadataRole.roleArn;
+    savedResultsDataSource.ds.serviceRoleArn = savedResultsRole.roleArn;
+    queryStatusDataSource.ds.serviceRoleArn = queryStatusRole.roleArn;
+
+    // Create AppSync resolvers
+    csvMetadataDataSource.createResolver('UploadFile', {
       typeName: 'Mutation',
       fieldName: 'uploadFile',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/uploadFile.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/uploadFile.response.vtl')
     });
 
-    uploadFileDS.createResolver('GetUploadStatusResolver', {
+    bedrockDataSource.createResolver('ProcessQuery', {
+      typeName: 'Query',
+      fieldName: 'processQuery',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/processQuery.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/processQuery.response.vtl')
+    });
+
+    athenaDataSource.createResolver('ExecuteQuery', {
+      typeName: 'Query',
+      fieldName: 'executeQuery',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/executeQuery.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/executeQuery.response.vtl')
+    });
+
+    queryStatusDataSource.createResolver('GetQueryStatus', {
+      typeName: 'Query',
+      fieldName: 'getQueryStatus',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getQueryStatus.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getQueryStatus.response.vtl')
+    });
+
+    chatHistoryDataSource.createResolver('GetChatHistory', {
+      typeName: 'Query',
+      fieldName: 'getChatHistory',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getChatHistory.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getChatHistory.response.vtl')
+    });
+
+    savedResultsDataSource.createResolver('SaveQueryResult', {
+      typeName: 'Mutation',
+      fieldName: 'saveQueryResult',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/saveQueryResult.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/saveQueryResult.response.vtl')
+    });
+
+    csvMetadataDataSource.createResolver('GetUploadStatus', {
       typeName: 'Query',
       fieldName: 'getUploadStatus',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getUploadStatus.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getUploadStatus.response.vtl')
     });
 
-    // Output AppSync API URL
+    savedResultsDataSource.createResolver('GetSavedResults', {
+      typeName: 'Query',
+      fieldName: 'getSavedResults',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getSavedResults.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/getSavedResults.response.vtl')
+    });
+
+    savedResultsDataSource.createResolver('DeleteSavedResult', {
+      typeName: 'Mutation',
+      fieldName: 'deleteSavedResult',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/deleteSavedResult.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/deleteSavedResult.response.vtl')
+    });
+
+    chatHistoryDataSource.createResolver('SaveChatMessage', {
+      typeName: 'Mutation',
+      fieldName: 'saveChatMessage',
+      requestMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/saveChatMessage.request.vtl'),
+      responseMappingTemplate: appsync.MappingTemplate.fromFile('mapping-templates/saveChatMessage.response.vtl')
+    });
+
+    // Attach role to Bedrock data source
+    bedrockDataSource.ds.serviceRoleArn = bedrockRole.roleArn;
+
+    // Create outputs
     new cdk.CfnOutput(this, 'GraphQLAPIURL', {
       value: api.graphqlUrl,
-      description: 'AppSync GraphQL API URL',
+      description: 'AppSync GraphQL API URL'
     });
 
-    // Output important values
     new cdk.CfnOutput(this, 'UserPoolId', {
       value: userPool.userPoolId,
       description: 'Cognito User Pool ID'
@@ -344,78 +504,14 @@ export class MainStack extends cdk.Stack {
       description: 'Cognito User Pool Client ID'
     });
 
-    new cdk.CfnOutput(this, 'ResultsBucketName', {
-      value: resultsBucket.bucketName,
-      description: 'S3 Bucket for Query Results'
-    });
-
     new cdk.CfnOutput(this, 'UploadBucketName', {
       value: uploadBucket.bucketName,
       description: 'S3 Bucket for CSV Uploads'
     });
 
-    new cdk.CfnOutput(this, 'TestUserRoleArn', {
-      value: testUserRole.roleArn,
-      description: 'Test User Role ARN'
+    new cdk.CfnOutput(this, 'ResultsBucketName', {
+      value: resultsBucket.bucketName,
+      description: 'S3 Bucket for Query Results'
     });
-
-    // Create CloudWatch metrics and alarms
-    const queryExecutionTime = new cloudwatch.Metric({
-      namespace: 'Switchblade',
-      metricName: 'QueryExecutionTime',
-      statistic: 'Average',
-      period: cdk.Duration.minutes(5),
-      dimensionsMap: {
-        Function: 'ProcessQuery'
-      }
-    });
-
-    const queryErrorRate = new cloudwatch.Metric({
-      namespace: 'Switchblade',
-      metricName: 'QueryErrorRate',
-      statistic: 'Sum',
-      period: cdk.Duration.minutes(5),
-      dimensionsMap: {
-        Function: 'ProcessQuery'
-      }
-    });
-
-    const uploadErrorRate = new cloudwatch.Metric({
-      namespace: 'Switchblade',
-      metricName: 'UploadErrorRate',
-      statistic: 'Sum',
-      period: cdk.Duration.minutes(5),
-      dimensionsMap: {
-        Function: 'UploadFile'
-      }
-    });
-
-    // Create CloudWatch alarms
-    new cloudwatch.Alarm(this, 'QueryExecutionTimeAlarm', {
-      metric: queryExecutionTime,
-      threshold: 10000, // 10 seconds
-      evaluationPeriods: 3,
-      datapointsToAlarm: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      actionsEnabled: true,
-    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
-
-    new cloudwatch.Alarm(this, 'QueryErrorRateAlarm', {
-      metric: queryErrorRate,
-      threshold: 5,
-      evaluationPeriods: 3,
-      datapointsToAlarm: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      actionsEnabled: true,
-    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
-
-    new cloudwatch.Alarm(this, 'UploadErrorRateAlarm', {
-      metric: uploadErrorRate,
-      threshold: 5,
-      evaluationPeriods: 3,
-      datapointsToAlarm: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      actionsEnabled: true,
-    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
   }
 } 

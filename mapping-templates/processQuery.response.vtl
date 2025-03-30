@@ -1,0 +1,21 @@
+#if($ctx.error)
+  $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#set($queryId = $util.autoId())
+
+#if($ctx.result.statusCode == 200)
+  #set($response = $util.parseJson($ctx.result.body))
+  #set($content = $response.content[0].text)
+  #set($sql = $content.replaceAll("(?s).*?(SELECT.*?;).*", "$1"))
+  #set($explanation = $content.replaceAll("(?s).*?;(.*)", "$1").trim())
+  
+  {
+    "queryId": $util.toJson($queryId),
+    "status": "PROCESSING",
+    "sql": $util.toJson($sql),
+    "explanation": $util.toJson($explanation)
+  }
+#else
+  $util.error($ctx.result.body, "BedrockError")
+#end 

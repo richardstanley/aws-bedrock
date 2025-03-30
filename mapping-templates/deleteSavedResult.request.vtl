@@ -1,0 +1,11 @@
+{
+  "version": "2018-05-29",
+  "operation": "DeleteItem",
+  "key": {
+    "userId": $util.dynamodb.toDynamoDBJson($ctx.args.userId),
+    "resultId": $util.dynamodb.toDynamoDBJson($ctx.args.resultId)
+  },
+  "condition": {
+    "expression": "attribute_exists(userId) AND attribute_exists(resultId)"
+  }
+} 
